@@ -1,0 +1,5 @@
+-r requirements.txt
+pytest>=8
+httpx>=0.27
+moto[s3,ec2,iam,rds,cloudtrail,sts]>=5
+bandit>=1.7

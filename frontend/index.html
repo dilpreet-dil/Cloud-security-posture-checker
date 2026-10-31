@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Security Hub</title>
+<style>
+:root{
+  --bg:#04080f; --edge:#15597a; --ink:#e8f1f9; --muted:#7f9ab2; --dim:#0e2538;
+  --cyan:#1fc8f2; --amber:#ff9f1a; --red:#ff4d4f; --green:#2ed47a; --yellow:#f2b705; --blue:#3d9bff;
+  --critical:var(--red); --high:var(--amber); --medium:var(--yellow); --low:var(--blue);
+  --c:14px;
+  --font:"Eurostile","Bank Gothic","Segoe UI","Helvetica Neue",Arial,system-ui,sans-serif;
+  --mono:ui-monospace,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{font:14px/1.45 var(--font);color:var(--ink);background:
+  radial-gradient(1100px 520px at 50% -8%,#0b2a40 0,transparent 62%),
+  linear-gradient(rgba(31,200,242,.035) 1px,transparent 1px) 0 0/48px 48px,
+  linear-gradient(90deg,rgba(31,200,242,.035) 1px,transparent 1px) 0 0/48px 48px,var(--bg);
+  padding:max(10px,env(safe-area-inset-top)) 10px max(10px,env(safe-area-inset-bottom))}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:0;padding:0}
+button:disabled{opacity:.5;cursor:progress}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+h1,h2,h3,p{margin:0}
+svg{display:block}
+.ic{fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+/* chamfered HUD panel: outer shape = edge colour, ::before = fill, inset 1px */
+.panel{--poly:polygon(var(--c) 0,calc(100% - var(--c)) 0,100% var(--c),100% calc(100% - var(--c)),calc(100% - var(--c)) 100%,var(--c) 100%,0 calc(100% - var(--c)),0 var(--c));
+  position:relative;isolation:isolate;background:var(--edge);clip-path:var(--poly);padding:16px 18px;min-width:0}
+.panel::before{content:"";position:absolute;inset:1px;z-index:-1;clip-path:var(--poly);
+  background:linear-gradient(180deg,#0a1b2c,#061019)}
+.panel.sm{--c:8px;padding:12px 14px}
+.panel h2{font-size:.82rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:#6fd8f5;margin-bottom:12px}
+.link{display:flex;justify-content:space-between;align-items:center;width:100%;margin-top:10px;padding:8px 10px;
+  color:#5fc7e6;font-size:.85rem;border:1px solid #15405a;background:rgba(21,89,122,.12)}
+.link:hover{background:rgba(31,200,242,.14)}
+.link svg{width:14px;height:14px}
+.k{color:var(--muted);font-size:.72rem;letter-spacing:.04em}
+
+.hub{display:grid;grid-template-columns:56px minmax(0,1fr);gap:12px;max-width:1700px;margin:0 auto}
+.rail{--c:12px;display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px;align-self:start;position:sticky;top:10px}
+.rail button{width:40px;height:40px;display:grid;place-items:center;color:var(--muted);border:1px solid transparent}
+.rail button svg{width:22px;height:22px}
+.rail button:hover{color:var(--ink)}
+.rail button.on{color:var(--cyan);border-color:#1b86a8;background:rgba(31,200,242,.12);box-shadow:0 0 14px rgba(31,200,242,.25)}
+
+.top{display:grid;grid-template-columns:minmax(200px,1fr) auto minmax(200px,1fr);gap:12px;align-items:center;margin-bottom:12px}
+.globe{display:flex;align-items:center;gap:10px;justify-self:start;--c:10px;padding:10px 16px}
+.globe svg{width:30px;height:30px;color:#8fa6ba}
+.globe b{display:block;font-size:.78rem;letter-spacing:.07em;font-weight:600;color:#9fb6c9;text-transform:uppercase}
+.title{--c:22px;padding:8px 54px;position:relative}
+.title::after,.title h1::before{content:"";position:absolute;top:50%;width:4px;height:26px;transform:translateY(-50%);background:var(--amber);box-shadow:0 0 8px var(--amber)}
+.title::after{right:22px}.title h1::before{left:22px}
+h1{font-size:clamp(1.5rem,3.4vw,2.6rem);font-weight:700;letter-spacing:.2em;text-transform:uppercase;text-align:center;
+  text-shadow:0 0 18px rgba(31,200,242,.45);white-space:nowrap}
+.tools{display:flex;gap:8px;justify-content:flex-end;align-items:stretch}
+.ibtn{position:relative;width:46px;display:grid;place-items:center;border:1px solid #1b6a8a;background:rgba(21,89,122,.14);color:#9fd6ea}
+.ibtn svg{width:22px;height:22px}
+.ibtn:hover{background:rgba(31,200,242,.18)}
+.badge{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;border-radius:9px;background:var(--amber);color:#1a1000;font-size:.7rem;font-weight:700;display:grid;place-items:center;padding:0 4px}
+.badge:empty{display:none}
+.run{border:1px solid #1b6a8a;background:rgba(21,89,122,.14);text-align:left;padding:7px 14px;min-width:150px}
+.run:hover{background:rgba(31,200,242,.18)}
+.run span:last-child{display:block;font-weight:600}
+#msg{min-height:1.2rem;font-size:.82rem;color:var(--muted);margin:-4px 2px 8px}
+#msg.err{color:var(--red)}
+
+.grid{display:grid;gap:12px;grid-template-columns:minmax(250px,.95fr) minmax(0,2.15fr) minmax(270px,1fr);
+  grid-template-areas:"std score queue" "sum score queue" "acc acc ins";grid-template-rows:auto 1fr auto}
+.p-std{grid-area:std}.p-sum{grid-area:sum}.p-score{grid-area:score}.p-queue{grid-area:queue}.p-acc{grid-area:acc}.p-ins{grid-area:ins}
+
+/* standards */
+.std{display:flex;align-items:center;gap:12px;padding:8px 0}
+.std+.std{border-top:1px solid #12344a}
+.std .nm{flex:1;min-width:0}.std .nm b{display:block;font-weight:600}
+.hex{width:44px;height:44px;flex:none}
+.hex text{fill:var(--ink);font:700 11px var(--font);text-anchor:middle;dominant-baseline:central}
+.sw{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:.75rem;font-weight:600}
+.sw i{width:38px;height:20px;border-radius:10px;background:#18364b;position:relative;transition:background .2s}
+.sw i::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#cfe0ec;transition:transform .2s}
+.sw[aria-checked=true] i{background:#1189b0}.sw[aria-checked=true] i::after{transform:translateX(18px)}
+.sw[aria-checked=true] span{color:#6fd8f5}
+
+/* summary */
+.row{display:grid;grid-template-columns:34px 56px 1fr auto;align-items:center;gap:8px;padding:9px 0}
+.row+.row{border-top:1px solid #12344a}
+.row svg{width:28px;height:28px}
+.row .n{font-size:1.7rem;font-weight:600;line-height:1}
+.row .pct{font-size:.8rem;font-weight:600}
+.bar{grid-column:2/-1;height:4px;background:var(--dim);margin-top:-2px}.bar i{display:block;height:100%}
+
+/* score */
+.p-score{display:flex;flex-direction:column}
+.shead{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline;margin-bottom:6px}
+.shead h2{margin:0}
+.delta{font-size:.82rem;color:var(--muted)}.delta b{margin-left:6px}
+.up{color:var(--green)}.down{color:var(--red)}
+.sbody{display:grid;grid-template-columns:minmax(300px,1fr) minmax(280px,1fr);gap:14px;flex:1;align-items:start}
+.gwrap{position:relative;max-width:440px;width:100%;margin:0 auto}
+#gauge{width:100%;height:auto}
+.seg{stroke:#10293d;transition:stroke .15s}
+.seg.on{stroke:var(--cyan);filter:drop-shadow(0 0 3px rgba(31,200,242,.7))}
+.seg.zone{stroke:#a8650f;opacity:.8}
+.tick{fill:var(--muted);font:12px var(--font)}
+.gc{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding-bottom:4%;pointer-events:none}
+.gc .big{font-size:clamp(3.4rem,9vw,5.4rem);font-weight:600;line-height:1;letter-spacing:-.02em}
+.gc .of{color:var(--muted);margin-top:4px}.gc .sc{font-size:1.05rem;margin-top:2px}
+.band{position:absolute;left:50%;bottom:2%;transform:translateX(-50%);padding:5px 30px;border:1px solid #1b6a8a;
+  background:rgba(8,24,38,.9);font-weight:600;letter-spacing:.12em;color:var(--amber);text-shadow:0 0 10px currentColor}
+.sub-stack{display:grid;gap:12px}
+.sub-stack h3{font-size:.82rem;letter-spacing:.07em;text-transform:uppercase;color:#6fd8f5;margin-bottom:8px;font-weight:600}
+.bd{display:grid;grid-template-columns:44px 1fr;gap:6px 12px;align-items:center;padding:6px 0}
+.bd+.bd{border-top:1px solid #12344a}
+.bd .l{display:flex;justify-content:space-between;gap:8px;font-size:.85rem}
+.bd .l em{font-style:normal;color:var(--muted);font-size:.8rem}
+.bd .bar{grid-column:auto;margin:5px 0 0;height:5px}
+.fc{display:grid;grid-template-columns:auto auto 1fr auto;gap:8px;align-items:center;width:100%;text-align:left;padding:7px 4px;font-size:.8rem}
+.fc+.fc{border-top:1px solid #12344a}
+.fc:hover{background:rgba(31,200,242,.08)}
+.tag{font-size:.65rem;font-weight:700;letter-spacing:.05em;color:var(--red);border:1px solid #7a2a2f;padding:1px 5px;background:rgba(255,77,79,.08)}
+.fc .ct{color:#bcd0df;font-weight:600;white-space:nowrap}
+.fc .tt{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.sv{font-size:.7rem;font-weight:700;white-space:nowrap;text-transform:uppercase}
+.sv::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:5px}
+.critical{color:var(--critical)}.high{color:var(--high)}.medium{color:var(--medium)}.low{color:var(--low)}
+.fcs{max-height:196px;overflow:auto}
+.empty{color:var(--muted);padding:10px 2px;font-size:.85rem}
+.cta{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;background:rgba(4,8,15,.82);z-index:3;padding:20px}
+.p-score.is-empty .cta{display:flex}
+.cta p{color:var(--muted);max-width:34ch}
+.btn{border:1px solid var(--cyan);color:var(--cyan);padding:9px 20px;font-weight:600;letter-spacing:.05em;background:rgba(31,200,242,.1)}
+.btn:hover{background:rgba(31,200,242,.25)}
+
+/* queue */
+.tabs{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid #15405a;margin-bottom:10px}
+.tabs button{padding:6px 2px;text-align:center;font-size:.62rem;letter-spacing:.04em;color:var(--muted);text-transform:uppercase}
+.tabs button b{display:block;font-size:1.05rem;color:var(--ink);letter-spacing:0}
+.tabs button.on{background:rgba(31,200,242,.14);box-shadow:inset 0 -2px 0 var(--cyan)}
+.tabs .critical{color:var(--critical)}.tabs .high{color:var(--high)}.tabs .medium{color:var(--medium)}.tabs .low{color:var(--low)}
+.tabs button b{color:var(--ink)}
+.q{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center;width:100%;text-align:left;padding:10px;border:1px solid #12344a;background:rgba(21,89,122,.1);margin-bottom:6px}
+.q:hover{border-color:#1b86a8}
+.q>svg{width:26px;height:26px}
+.q .t{font-weight:600;font-size:.88rem}
+.q .r{font:.74rem var(--mono);color:var(--muted);word-break:break-all}
+.q .m{text-align:right;font-size:.72rem;color:var(--muted);white-space:nowrap}
+.q .m b{display:block;border:1px solid currentColor;padding:1px 8px;margin-bottom:3px;font-size:.68rem;letter-spacing:.04em}
+.qlist{max-height:430px;overflow:auto;padding-right:2px}
+
+/* accounts */
+.acc{display:grid;grid-template-columns:130px minmax(0,1fr) minmax(220px,300px);gap:16px;align-items:center}
+.acc .big{font-size:2.2rem;font-weight:600;line-height:1.1}
+.leg{margin-top:10px;display:grid;gap:6px;font-size:.85rem}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;box-shadow:0 0 8px currentColor;background:currentColor}
+.leg b{font-size:1.1rem;margin-right:6px}
+.healthy{color:var(--green)}.attention{color:var(--amber)}.high_risk{color:var(--red)}
+#map{width:100%;height:auto;max-height:230px}
+.ba{display:grid;grid-template-columns:minmax(0,120px) 1fr 30px;gap:10px;align-items:center;padding:5px 0;font-size:.85rem}
+.ba span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ba .bar{grid-column:auto;margin:0;height:5px}
+.ba b{text-align:right}
+
+/* insights */
+.ins{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.card{border:1px solid #15405a;background:rgba(21,89,122,.1);padding:10px 12px}
+.card h3{font-size:.76rem;letter-spacing:.07em;text-transform:uppercase;color:#6fd8f5;font-weight:600}
+.card .v{font-size:2.2rem;font-weight:600;line-height:1.1;margin-top:6px}
+.card .v.name{font-size:1.2rem;color:var(--red);margin-top:12px}
+.card .s{color:var(--muted);font-size:.75rem}
+
+/* drawer */
+dialog{width:min(920px,calc(100vw - 20px));max-height:calc(100vh - 20px);border:0;padding:0;background:transparent;color:var(--ink);overflow:visible}
+dialog::backdrop{background:rgba(2,6,12,.75);backdrop-filter:blur(3px)}
+dialog .panel{max-height:calc(100vh - 20px);display:flex;flex-direction:column;--c:16px}
+.dh{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.dh h2{margin:0;font-size:1rem}
+.dh button{width:34px;height:34px;display:grid;place-items:center;border:1px solid #1b6a8a}
+.dh svg{width:18px;height:18px}
+.db{overflow:auto;min-height:0}
+.fl{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+select,input[type=search]{font:inherit;color:var(--ink);background:#08182a;border:1px solid #1b6a8a;padding:7px 10px}
+input[type=search]{flex:1;min-width:160px}
+table{border-collapse:collapse;width:100%;min-width:560px}
+th,td{padding:8px 10px;text-align:left;vertical-align:top;border-bottom:1px solid #12344a;font-size:.84rem}
+th{color:var(--muted);font-weight:600;font-size:.74rem;letter-spacing:.05em;text-transform:uppercase;position:sticky;top:0;background:#071523}
+td small{display:block;color:var(--muted)}
+td .fix{margin-top:4px;color:#8fd9f0}
+.mono{font-family:var(--mono);font-size:.8rem;word-break:break-all}
+.mini{border:1px solid #1b6a8a;padding:3px 9px;font-size:.75rem;margin-right:4px}
+.mini:hover{background:rgba(31,200,242,.18)}
+.note{color:var(--muted);font-size:.85rem;max-width:70ch;margin:8px 0}
+.act{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+
+@media (max-width:1180px){
+  .grid{grid-template-columns:minmax(0,1fr);grid-template-areas:"score" "queue" "std" "sum" "acc" "ins";grid-template-rows:none}
+  .acc{grid-template-columns:1fr}
+}
+@media (max-width:760px){
+  .hub{grid-template-columns:1fr}
+  .rail{flex-direction:row;position:static;justify-content:center;padding:6px}
+  .top{grid-template-columns:1fr}.title{justify-self:stretch;padding:8px 36px}.tools{justify-content:flex-start}
+  .sbody{grid-template-columns:1fr}
+  h1{letter-spacing:.12em}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="hub">
+  <nav class="panel rail" aria-label="Sections">
+    <button class="on" data-nav="dash" aria-label="Dashboard" title="Dashboard"></button>
+    <button data-nav="std" aria-label="Standards" title="Standards"></button>
+    <button data-nav="find" aria-label="All findings" title="All findings"></button>
+    <button data-nav="acc" aria-label="Accounts" title="Accounts"></button>
+  </nav>
+
+  <div>
+    <header class="top">
+      <div class="panel globe"><span id="globe-ic"></span><div><b>Global view</b><span class="k" id="updated">No scans yet</span></div></div>
+      <div class="panel title"><h1>Security Hub</h1></div>
+      <div class="tools">
+        <button class="ibtn" id="btn-aws" aria-label="Scan an AWS account" title="Scan an AWS account"></button>
+        <button class="ibtn" id="btn-bell" aria-label="Critical findings" title="Critical findings"><span class="badge" id="bell-n"></span></button>
+        <button class="ibtn" id="btn-gear" aria-label="Tools and settings" title="Tools and settings"></button>
+        <button class="run" id="btn-demo"><span class="k" id="demo-k">Sample data</span><span>Run demo scan</span></button>
+      </div>
+    </header>
+    <p id="msg" role="status" aria-live="polite"></p>
+
+    <main class="grid">
+      <section class="panel p-std"><h2>Standards &amp; frameworks</h2><div id="std-list"></div>
+        <button class="link" id="lnk-std"><span>Manage standards</span><span class="ch"></span></button></section>
+
+      <section class="panel p-sum"><h2>Security summary</h2><div id="sum"></div>
+        <button class="link" id="lnk-sum"><span>View all failed controls</span><span class="ch"></span></button></section>
+
+      <section class="panel p-score" id="p-score">
+        <div class="cta"><h2 style="margin:0">No scans yet</h2><p>Run a demo scan to see how the hub works, or scan an AWS account with read-only credentials.</p>
+          <button class="btn" id="btn-demo2">Run demo scan</button></div>
+        <div class="shead"><h2>Overall security score</h2><div class="delta" id="delta"></div></div>
+        <div class="sbody">
+          <div class="gwrap">
+            <svg id="gauge" viewBox="0 0 400 400" role="img" aria-label="Security score gauge"></svg>
+            <div class="gc"><div class="big" id="score">–</div><div class="of">/100</div><div class="sc">Security Score</div></div>
+            <div class="band" id="band">–</div>
+          </div>
+          <div class="sub-stack">
+            <div class="panel sm"><h3>Standards score breakdown</h3><div id="bd"></div></div>
+            <div class="panel sm"><h3 id="fc-h">Failed controls</h3><div class="fcs" id="fc"></div>
+              <button class="link" id="lnk-fc"><span>View all failed controls</span><span class="ch"></span></button></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel p-queue"><h2>Findings queue</h2>
+        <div class="tabs" id="tabs" role="tablist"></div><div class="qlist" id="q"></div>
+        <button class="link" id="lnk-q"><span>View all findings</span><span class="ch"></span></button></section>
+
+      <section class="panel p-acc"><h2>Account rollup</h2>
+        <div class="acc">
+          <div><div class="k">Accounts</div><div class="big" id="acc-n">0</div><div class="k">Total</div>
+            <div class="leg" id="leg"></div></div>
+          <svg id="map" viewBox="0 0 600 240" role="img" aria-label="Accounts by region"></svg>
+          <div><h3 class="k" style="margin-bottom:6px;font-size:.78rem;letter-spacing:.05em;text-transform:uppercase">Score by account</h3>
+            <div id="ba"></div>
+            <button class="link" id="lnk-acc"><span>View all accounts</span><span class="ch"></span></button></div>
+        </div>
+      </section>
+
+      <section class="panel p-ins"><h2>Insights</h2><div class="ins" id="ins"></div></section>
+    </main>
+  </div>
+</div>
+<dialog id="dlg"></dialog>
+<input type="file" id="import-file" accept=".json,application/json" hidden>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const SEV = ["critical", "high", "medium", "low"];
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const NS = "http://www.w3.org/2000/svg";
+const h = (tag, props = {}, ...kids) => {            // text is always inserted as text, never HTML
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) typeof v === "function" ? e[k] = v : k === "class" ? e.className = v : e.setAttribute(k, v);
+  for (const c of kids.flat()) e.append(c instanceof Node ? c : document.createTextNode(c ?? ""));
+  return e;
+};
+const sv = (tag, props = {}, ...kids) => {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(props)) e.setAttribute(k, v);
+  kids.forEach(c => e.append(c)); return e;
+};
+const ICONS = {  // static, trusted markup
+  grid: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',
+  shield: '<path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z"/>',
+  list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  cloud: '<path d="M7 18a4 4 0 010-8 5.5 5.5 0 0110.7 1.4A3.3 3.3 0 0117 18z"/>',
+  target: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>',
+  bell: '<path d="M6 16v-5a6 6 0 1112 0v5l2 2H4z"/><path d="M10 21h4"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9L7 7M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
+  check: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/>',
+  warn: '<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/>',
+  minus: '<circle cx="12" cy="12" r="9"/><path d="M8 12h8"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/>',
+  alert: '<circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5h.01"/>',
+  chev: '<path d="M9 6l6 6-6 6"/>', close: '<path d="M6 6l12 12M18 6L6 18"/>',
+};
+const icon = (n, cls = "") => { const e = sv("svg", { viewBox: "0 0 24 24", class: "ic " + cls, "aria-hidden": "true" }); e.innerHTML = ICONS[n]; return e; };
+const hex = (code, color = "var(--cyan)") => sv("svg", { class: "hex", viewBox: "0 0 44 44", "aria-hidden": "true" },
+  sv("polygon", { points: "22,2 40,12 40,32 22,42 4,32 4,12", fill: "rgba(31,200,242,.08)", stroke: color, "stroke-width": 1.6 }),
+  Object.assign(sv("text", { x: 22, y: 23 }), { textContent: code }));
+const SEVICON = { critical: "target", high: "warn", medium: "alert", low: "info" };
+const ago = iso => {
+  const m = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000));
+  if (m < 1) return "just now"; if (m < 60) return m + " min ago";
+  const hr = Math.round(m / 60); return hr < 48 ? hr + " h ago" : Math.round(hr / 24) + " d ago";
+};
+const scoreColor = n => n >= 75 ? "var(--cyan)" : n >= 50 ? "var(--amber)" : "var(--red)";
+const band = n => n >= 90 ? ["EXCELLENT", "var(--green)"] : n >= 75 ? ["GOOD", "var(--cyan)"] : n >= 50 ? ["FAIR", "var(--amber)"] : ["POOR", "var(--red)"];
+const pretty = a => a.replace(/_/g, " ");
+
+let ov = null, tab = "all", shown = JSON.parse(localStorage.getItem("hub_std") || "{}"), lastScore = null;
+const on = code => shown[code] !== false;
+
+/* ---------- API ---------- */
+async function api(path, opts = {}) {
+  const key = sessionStorage.getItem("cspm_key");
+  const res = await fetch("/api" + path, { ...opts, headers: { "Content-Type": "application/json", ...(key ? { "X-API-Key": key } : {}) } });
+  if (res.status === 401) {
+    const k = prompt("This server requires an API key:");
+    if (!k) throw new Error("API key required");
+    sessionStorage.setItem("cspm_key", k); return api(path, opts);
+  }
+  if (!res.ok) {
+    let m = res.statusText;
+    try { const d = (await res.json()).detail; m = typeof d === "string" ? d : JSON.stringify(d); } catch {}
+    throw new Error(m);
+  }
+  return res;
+}
+const say = (t, err) => { const m = $("#msg"); m.textContent = t || ""; m.className = err ? "err" : ""; };
+async function guarded(label, fn) {
+  const bs = document.querySelectorAll("button"); bs.forEach(b => b.disabled = true); say(label);
+  try { await fn(); } catch (e) { say(e.message, true); } finally { bs.forEach(b => b.disabled = false); }
+}
+async function load() { ov = await (await api("/overview")).json(); render(); }
+
+/* ---------- gauge ---------- */
+function buildGauge() {
+  const g = $("#gauge"); g.replaceChildren();
+  const N = 54, cx = 200, cy = 200, r1 = 116, r2 = 148;
+  for (let i = 0; i < N; i++) {
+    const pct = (i + .5) / N * 100, a = (135 + pct / 100 * 270) * Math.PI / 180;
+    const l = sv("line", { x1: cx + r1 * Math.cos(a), y1: cy + r1 * Math.sin(a), x2: cx + r2 * Math.cos(a), y2: cy + r2 * Math.sin(a), "stroke-width": 8, class: "seg" });
+    l.dataset.pct = pct; g.append(l);
+  }
+  g.append(sv("circle", { cx, cy, r: 100, fill: "none", stroke: "#12344a", "stroke-width": 1 }));
+  [0, 25, 50, 75, 100].forEach(v => {
+    const a = (135 + v / 100 * 270) * Math.PI / 180;
+    g.append(Object.assign(sv("text", { x: cx + 174 * Math.cos(a), y: cy + 174 * Math.sin(a) + 5, "text-anchor": "middle", class: "tick" }), { textContent: v }));
+  });
+}
+function paintGauge(score, animate) {
+  const segs = [...document.querySelectorAll(".seg")], num = $("#score");
+  const apply = k => segs.forEach(x => {
+    const p = +x.dataset.pct, lit = p <= score * k;
+    x.setAttribute("class", "seg " + (lit ? "on" : p >= 75 ? "zone" : ""));
+  });
+  if (!animate || reduced) { apply(1); num.textContent = Math.round(score); return; }
+  const t0 = performance.now();
+  const step = now => { const k = Math.min(1, (now - t0) / 900); apply(k); num.textContent = Math.round(score * k); if (k < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+
+/* ---------- world map (stylised dot grid) ---------- */
+const LAND = [
+  [[-168,66],[-140,70],[-110,72],[-80,73],[-60,62],[-55,50],[-67,44],[-75,35],[-81,25],[-97,26],[-97,18],[-88,16],[-83,9],[-78,8],[-86,14],[-105,20],[-112,30],[-118,33],[-124,40],[-125,49],[-135,58],[-150,60],[-165,60]],
+  [[-55,60],[-45,60],[-20,70],[-20,82],[-60,82],[-72,76]],
+  [[-78,8],[-72,12],[-60,10],[-50,0],[-35,-6],[-39,-15],[-48,-26],[-58,-38],[-65,-42],[-68,-52],[-72,-54],[-74,-45],[-71,-30],[-70,-18],[-76,-12],[-81,-5],[-80,2]],
+  [[-10,36],[-9,43],[-2,47],[-5,50],[3,52],[8,56],[5,60],[12,66],[25,71],[40,68],[40,56],[30,46],[28,41],[20,38],[12,38],[3,37]],
+  [[-10,52],[-6,58],[-2,59],[2,53],[0,50],[-5,50]],
+  [[-17,21],[-10,30],[-6,36],[10,37],[32,31],[35,28],[43,12],[51,12],[40,-3],[41,-15],[35,-25],[27,-34],[18,-34],[12,-17],[9,-1],[9,4],[-8,4],[-17,14]],
+  [[28,41],[40,56],[40,68],[70,73],[110,77],[140,72],[170,69],[180,66],[160,58],[142,52],[135,43],[127,38],[122,30],[120,22],[108,18],[106,10],[100,2],[98,10],[92,22],[80,8],[73,18],[67,25],[57,25],[52,17],[43,13],[35,30],[36,36]],
+  [[130,31],[135,34],[141,41],[145,44],[142,45],[138,38],[131,34]],
+  [[95,5],[105,-6],[115,-8],[120,-5],[110,2],[100,6]], [[109,1],[118,7],[119,-1],[114,-4]],
+  [[114,-22],[122,-17],[131,-12],[137,-12],[142,-11],[146,-19],[153,-26],[150,-37],[140,-38],[131,-31],[115,-34]],
+  [[172,-35],[178,-38],[173,-46],[167,-46]], [[44,-25],[50,-15],[49,-12],[44,-17]],
+];
+const REGIONS = { "us-east-1": [-77, 39], "us-east-2": [-83, 40], "us-west-1": [-122, 37], "us-west-2": [-122, 46], "ca-central-1": [-73.6, 45.5],
+  "sa-east-1": [-46.6, -23.5], "eu-west-1": [-6.3, 53.3], "eu-west-2": [-0.1, 51.5], "eu-west-3": [2.3, 48.9], "eu-central-1": [8.7, 50.1],
+  "eu-north-1": [18, 59.3], "eu-south-1": [9.2, 45.5], "af-south-1": [18.4, -33.9], "me-south-1": [50.5, 26], "ap-south-1": [72.9, 19.1],
+  "ap-southeast-1": [103.8, 1.35], "ap-southeast-2": [151.2, -33.9], "ap-northeast-1": [139.7, 35.7], "ap-northeast-2": [127, 37.5], "ap-east-1": [114.2, 22.3] };
+const inPoly = (x, y, p) => { let c = false; for (let i = 0, j = p.length - 1; i < p.length; j = i++) { const [xi, yi] = p[i], [xj, yj] = p[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
+const mx = lon => (lon + 180) / 360 * 600, my = lat => 5 + (80 - lat) * 1.667;
+let mapDots = "";
+function drawMap(accounts) {
+  const m = $("#map"); m.replaceChildren();
+  if (!mapDots) for (let lat = 78; lat > -56; lat -= 3) for (let lon = -178; lon < 180; lon += 3)
+    if (LAND.some(p => inPoly(lon, lat, p))) mapDots += `M${mx(lon).toFixed(1)} ${my(lat).toFixed(1)}h.01`;
+  m.append(sv("path", { d: mapDots, stroke: "#1a4766", "stroke-width": 2.3, "stroke-linecap": "round", fill: "none" }));
+  const seen = {};
+  (accounts || []).forEach(a => {
+    const [lon, lat] = REGIONS[a.region] || REGIONS["us-east-1"], n = seen[a.region] = (seen[a.region] ?? -1) + 1;
+    const x = mx(lon) + n * 11, y = my(lat), col = `var(--${a.status === "healthy" ? "green" : a.status === "attention" ? "amber" : "red"})`;
+    m.append(sv("g", {}, sv("circle", { cx: x, cy: y, r: 9, fill: col, "fill-opacity": .18, stroke: col, "stroke-opacity": .6 }),
+      sv("circle", { cx: x, cy: y, r: 3.4, fill: col }),
+      Object.assign(sv("title"), { textContent: `${a.account} · ${a.region || "unknown region"} · score ${a.score}` })));
+  });
+}
+
+/* ---------- render ---------- */
+function render() {
+  const empty = !ov || ov.empty;
+  $("#p-score").classList.toggle("is-empty", empty);
+  $("#demo-k").textContent = !empty && ov.has_demo ? "Sample data" : "Cloud security";
+  $("#updated").textContent = empty ? "No scans yet" : `Last updated: ${ago(ov.updated_at)}`;
+  ["#lnk-std", "#lnk-sum", "#lnk-fc", "#lnk-q", "#lnk-acc"].forEach(id => $(id + " .ch").replaceChildren(icon("chev")));
+  if (empty) {
+    $("#bell-n").textContent = ""; $("#delta").textContent = ""; $("#band").textContent = "–"; $("#band").style.color = "var(--muted)";
+    $("#std-list").replaceChildren(h("p", { class: "empty" }, "Standards appear after your first scan."));
+    ["#sum", "#bd", "#fc", "#q", "#ba", "#leg"].forEach(i => $(i).replaceChildren());
+    $("#fc").append(h("p", { class: "empty" }, "No failed controls to show."));
+    $("#q").append(h("p", { class: "empty" }, "No findings yet."));
+    $("#tabs").replaceChildren(); $("#ins").replaceChildren(); $("#acc-n").textContent = "0";
+    paintGauge(0, false); drawMap([]); return;
+  }
+  const std = ov.standards, vis = std.filter(s => on(s.code));
+  /* standards */
+  $("#std-list").replaceChildren(...(std.length ? std.map(s => h("div", { class: "std" }, hex(s.code),
+    h("div", { class: "nm" }, h("b", {}, s.name), h("span", { class: "k" }, `${s.total} mapped checks`)),
+    switchBtn(s.code))) : [h("p", { class: "empty" }, "No framework mappings in this data (imported findings carry none).")]));
+  /* summary */
+  const S = ov.summary, pc = n => S.total ? (n / S.total * 100).toFixed(1) + "%" : "0%";
+  const rows = [["shield", "var(--blue)", S.total, "Total checks", "", "var(--blue)", 100], ["check", "var(--green)", S.passed, "Passed", pc(S.passed), "var(--green)", S.total ? S.passed / S.total * 100 : 0],
+    ["warn", "var(--amber)", S.failed, "Failed", pc(S.failed), "var(--amber)", S.total ? S.failed / S.total * 100 : 0], ["minus", "#8fa6ba", S.not_evaluated, "Not evaluated", "", "#8fa6ba", 0]];
+  $("#sum").replaceChildren(...rows.map(([ic, col, n, lab, p, bc, w]) => h("div", { class: "row" },
+    Object.assign(icon(ic), { style: `color:${col}` }), h("div", { class: "n" }, n), h("div", { class: "k", style: "font-size:.85rem" }, lab),
+    h("div", { class: "pct", style: `color:${col}` }, p), h("div", { class: "bar" }, h("i", { style: `width:${w}%;background:${bc}` })))));
+  /* score */
+  if (lastScore !== ov.score) { paintGauge(ov.score, true); lastScore = ov.score; } else paintGauge(ov.score, false);
+  const [bn, bc2] = band(ov.score); $("#band").textContent = bn; $("#band").style.color = bc2;
+  const d = $("#delta"); d.replaceChildren();
+  if (ov.delta == null) d.textContent = "First scan: nothing to compare yet";
+  else d.append("Compared to previous scan", ov.delta === 0 ? h("b", {}, "no change") : h("b", { class: ov.delta > 0 ? "up" : "down" }, `${ov.delta > 0 ? "▲" : "▼"} ${Math.abs(ov.delta)} pts`));
+  /* breakdown + failed controls */
+  $("#bd").replaceChildren(...(vis.length ? vis.map(s => h("div", { class: "bd" }, hex(s.code),
+    h("div", {}, h("div", { class: "l" }, h("span", {}, s.name), h("b", {}, `${Math.round(s.score)}/100`), h("em", {}, `${Math.round(s.score)}%`)),
+      h("div", { class: "bar" }, h("i", { style: `width:${s.score}%;background:${scoreColor(s.score)}` }))))) : [h("p", { class: "empty" }, "No standards switched on.")]));
+  const fcs = ov.failed_controls.filter(c => on(c.standard));
+  $("#fc-h").textContent = `Failed controls (${fcs.length})`;
+  $("#fc").replaceChildren(...(fcs.length ? fcs.map(c => h("button", { class: "fc", onclick: () => drawerFindings({ rule: c.rule_id }), title: `${c.resources} affected resource(s)` },
+    h("span", { class: "tag" }, "FAILED"), h("span", { class: "ct" }, c.control), h("span", { class: "tt" }, c.title),
+    h("span", { class: "sv " + c.severity }, c.severity))) : [h("p", { class: "empty" }, "No failed controls. Nice.")]));
+  /* queue */
+  const C = ov.queue.counts, tabs = ["all", ...SEV];
+  $("#tabs").replaceChildren(...tabs.map(t => h("button", { role: "tab", "aria-selected": t === tab, class: (t === tab ? "on " : "") + (t === "all" ? "" : t), onclick: () => { tab = t; render(); } },
+    t, h("b", {}, C[t]))));
+  const items = ov.queue.items.filter(f => tab === "all" || f.severity === tab).slice(0, 40);
+  $("#q").replaceChildren(...(items.length ? items.map(f => h("button", { class: "q", onclick: () => drawerFindings({ rule: f.rule_id }) },
+    Object.assign(icon(SEVICON[f.severity] || "info"), { class: "ic " + f.severity }),
+    h("div", {}, h("div", { class: "t" }, f.title), h("div", { class: "r" }, f.resource + (ov.accounts.length > 1 ? " · " + f.account : ""))),
+    h("div", { class: "m " + f.severity }, h("b", {}, f.severity), h("span", {}, ago(f.started_at))))) : [h("p", { class: "empty" }, "Nothing in this category.")]));
+  $("#bell-n").textContent = C.critical || "";
+  /* accounts */
+  const A = ov.accounts, cnt = k => A.filter(a => a.status === k).length;
+  $("#acc-n").textContent = A.length;
+  $("#leg").replaceChildren(...[["healthy", "Healthy"], ["attention", "Needs attention"], ["high_risk", "High risk"]].map(([k, l]) =>
+    h("div", {}, h("i", { class: "dot " + k }), h("b", {}, cnt(k)), l)));
+  $("#ba").replaceChildren(...A.map(a => h("div", { class: "ba" }, h("span", { title: a.account }, a.account),
+    h("div", { class: "bar" }, h("i", { style: `width:${a.score}%;background:var(--${a.status === "healthy" ? "green" : a.status === "attention" ? "amber" : "red"})` })),
+    h("b", { class: a.status === "high_risk" ? "high_risk" : "" }, Math.round(a.score)))));
+  drawMap(A);
+  /* insights */
+  const I = ov.insights, na = h("div", { class: "s" }, "Needs two scans");
+  const card = (t, v, s) => h("div", { class: "card" }, h("h3", {}, t), I ? h("div", { class: "v" }, v) : h("div", { class: "v" }, "–"), I ? h("div", { class: "s" }, s) : na.cloneNode(true));
+  $("#ins").replaceChildren(card("New findings", I?.new, "since previous scan"), card("Resolved findings", I?.resolved, "since previous scan"),
+    card("Controls improved", I?.controls_improved, "rules with no failures now"),
+    h("div", { class: "card" }, h("h3", {}, "Top risk account"), h("div", { class: "v name" }, ov.top_risk.account), h("div", { class: "s" }, `Score ${Math.round(ov.top_risk.score)}/100`)));
+}
+function switchBtn(code) {
+  const b = h("button", { class: "sw", role: "switch", "aria-checked": on(code), "aria-label": `Show ${code} in breakdown`,
+    onclick: () => { shown[code] = !on(code); localStorage.setItem("hub_std", JSON.stringify(shown)); render(); } }, h("i"), h("span", {}, on(code) ? "ON" : "OFF"));
+  return b;
+}
+
+/* ---------- drawers ---------- */
+const dlg = $("#dlg");
+dlg.addEventListener("click", e => { if (e.target === dlg) dlg.close(); });
+function openDrawer(title, ...body) {
+  dlg.replaceChildren(h("div", { class: "panel" }, h("div", { class: "dh" }, h("h2", {}, title),
+    h("button", { "aria-label": "Close", onclick: () => dlg.close() }, icon("close"))), h("div", { class: "db" }, ...body)));
+  if (!dlg.open) dlg.showModal();
+}
+const csvSafe = v => { v = String(v ?? ""); return '"' + (/^[=+\-@\t\r]/.test(v) ? "'" + v : v).replaceAll('"', '""') + '"'; };
+function saveBlob(blob, name) { const a = h("a", { href: URL.createObjectURL(blob), download: name }); document.body.append(a); a.click(); a.remove(); }
+
+function drawerFindings(f0 = {}) {
+  if (!ov || ov.empty) return say("Run a scan first.");
+  const fl = { severity: f0.severity || "", account: "", q: "", rule: f0.rule || "" };
+  const body = h("div"), sel = (opts, cur, set, label) => { const s = h("select", { "aria-label": label, onchange: () => { set(s.value); draw(); } },
+    ...opts.map(([v, t]) => h("option", { value: v }, t))); s.value = cur; return s; };
+  const list = () => ov.queue.items.filter(f => (!fl.severity || f.severity === fl.severity) && (!fl.account || f.account === fl.account) &&
+    (!fl.rule || f.rule_id === fl.rule) && (!fl.q || (f.resource + f.rule_id + f.title).toLowerCase().includes(fl.q.toLowerCase())));
+  const tbody = h("tbody"), count = h("span", { class: "k" });
+  const draw = () => {
+    const rows = list(); count.textContent = `${rows.length} finding${rows.length === 1 ? "" : "s"}` + (rows.length > 300 ? " (showing first 300)" : "");
+    tbody.replaceChildren(...(rows.length ? rows.slice(0, 300).map(f => h("tr", {},
+      h("td", {}, h("span", { class: "sv " + f.severity }, f.severity)), h("td", {}, f.rule_id, f.compliance ? h("small", {}, f.compliance) : ""),
+      h("td", { class: "mono" }, f.resource, h("small", {}, f.account)),
+      h("td", {}, f.title, h("small", {}, f.detail), f.remediation ? h("div", { class: "fix" }, "Fix: " + f.remediation) : ""))) :
+      [h("tr", {}, h("td", { colspan: 4, class: "empty" }, "No findings match these filters."))]));
+  };
+  const search = h("input", { type: "search", placeholder: "Search resource or rule", "aria-label": "Search findings", oninput: () => { fl.q = search.value; draw(); } });
+  body.append(h("div", { class: "fl" },
+    sel([["", "Any severity"], ...SEV.map(s => [s, s])], fl.severity, v => fl.severity = v, "Severity"),
+    sel([["", "Any account"], ...ov.accounts.map(a => [a.account, a.account])], "", v => fl.account = v, "Account"), search,
+    h("button", { class: "mini", onclick: () => {
+      const cols = ["rule_id", "severity", "account", "service", "resource", "title", "detail", "remediation", "compliance"];
+      saveBlob(new Blob([cols.join(",") + "\r\n" + list().map(f => cols.map(c => csvSafe(f[c])).join(",")).join("\r\n")], { type: "text/csv" }), "findings.csv");
+    } }, "Export CSV"), count),
+    h("div", { style: "overflow-x:auto" }, h("table", {}, h("thead", {}, h("tr", {}, ...["Severity", "Rule", "Resource", "Finding"].map(t => h("th", {}, t)))), tbody)));
+  draw();
+  openDrawer(fl.rule ? `Findings for ${fl.rule}` : "All findings", body);
+}
+function drawerControls() {
+  if (!ov || ov.empty) return say("Run a scan first.");
+  openDrawer("Failed controls", h("div", { style: "overflow-x:auto" }, h("table", {}, h("thead", {}, h("tr", {}, ...["Control", "Check", "Severity", "Resources"].map(t => h("th", {}, t)))),
+    h("tbody", {}, ...ov.failed_controls.map(c => h("tr", {}, h("td", {}, c.control), h("td", {}, h("button", { style: "text-align:left;color:#8fd9f0", onclick: () => drawerFindings({ rule: c.rule_id }) }, `${c.rule_id}: ${c.title}`)),
+      h("td", {}, h("span", { class: "sv " + c.severity }, c.severity)), h("td", {}, c.resources)))))));
+}
+function drawerAccounts() {
+  if (!ov || ov.empty) return say("Run a scan first.");
+  const dl = (id, fmt) => guarded("Preparing report…", async () => {
+    saveBlob(await (await api(`/scans/${id}/report?format=${fmt}`)).blob(), `posture-scan-${id}.${fmt}`); say(`Downloaded ${fmt.toUpperCase()} report.`);
+  });
+  openDrawer("Accounts", h("div", { style: "overflow-x:auto" }, h("table", {}, h("thead", {}, h("tr", {}, ...["Account", "Region", "Score", "Failed", "Last scan", "Reports"].map(t => h("th", {}, t)))),
+    h("tbody", {}, ...ov.accounts.map(a => h("tr", {}, h("td", {}, a.account, h("small", {}, a.source === "prowler" ? "Prowler import" : a.provider === "mock" ? "Sample data" : "AWS")),
+      h("td", {}, a.region || "n/a"), h("td", { class: a.status }, Math.round(a.score)), h("td", {}, `${a.failed} of ${a.total}`), h("td", {}, ago(a.started_at)),
+      h("td", {}, ...["html", "csv", "json"].map(f => h("button", { class: "mini", onclick: () => dl(a.scan_id, f) }, f.toUpperCase())))))))));
+}
+function drawerStandards() {
+  openDrawer("Manage standards", h("p", { class: "note" }, "Switch standards on or off to include them in the score breakdown and failed-controls list. The overall score always covers every check."),
+    h("div", {}, ...(ov && !ov.empty ? ov.standards : []).map(s => h("div", { class: "std" }, hex(s.code), h("div", { class: "nm" }, h("b", {}, s.name),
+      h("span", { class: "k" }, `${s.total} mapped checks · score ${Math.round(s.score)}`)), switchBtn(s.code)))),
+    h("p", { class: "note" }, "Control references are an approximate mapping of each check to CIS AWS Foundations and PCI DSS v4.0 requirements. Treat them as a guide for prioritising work, not as a compliance attestation."));
+}
+function drawerTools() {
+  openDrawer("Tools", h("div", { class: "act" },
+    h("button", { class: "btn", onclick: () => { dlg.close(); $("#import-file").click(); } }, "Import Prowler results"),
+    h("p", { class: "note" }, "Upload a Prowler JSON or OCSF JSON file (prowler aws -M json-ocsf). It is stored as its own account and scored like any other scan."),
+    h("button", { class: "btn", onclick: () => { sessionStorage.removeItem("cspm_key"); dlg.close(); say("Saved API key cleared. You will be asked again if the server needs one."); } }, "Clear saved API key"),
+    h("p", { class: "note" }, "Sample data is generated for five fictional accounts so you can explore the hub without cloud credentials.")));
+}
+
+/* ---------- actions ---------- */
+const DEMO = ["Prod-Account", "Security-Account", "Dev-Account", "Shared-Services", "Legacy-Account"];
+const runDemo = () => guarded("Running demo scan…", async () => {
+  const rounds = ov && !ov.empty ? 1 : 2;   // first run also records a baseline so comparisons have something to compare to
+  let i = 0;
+  for (let r = 0; r < rounds; r++) for (const profile of DEMO) {
+    say(`Running demo scan ${++i} of ${rounds * DEMO.length}…`);
+    await api("/scans", { method: "POST", body: JSON.stringify({ provider: "mock", profile }) });
+  }
+  await load(); say("Demo scan finished.");
+});
+$("#btn-demo").onclick = $("#btn-demo2").onclick = runDemo;
+$("#btn-aws").onclick = () => {
+  const region = prompt("AWS region to scan (leave empty for the server default):", "");
+  if (region === null) return;
+  guarded("Scanning AWS (read-only)…", async () => {
+    await api("/scans", { method: "POST", body: JSON.stringify({ provider: "aws", ...(region.trim() ? { region: region.trim() } : {}) }) });
+    await load(); say("AWS scan finished.");
+  });
+};
+$("#import-file").onchange = e => {
+  const file = e.target.files[0]; e.target.value = ""; if (!file) return;
+  guarded("Importing Prowler results…", async () => {
+    let data; try { data = JSON.parse(await file.text()); } catch { throw new Error("That file is not valid JSON."); }
+    const list = Array.isArray(data) ? data : data.findings;
+    if (!Array.isArray(list)) throw new Error("Expected a JSON array of Prowler findings.");
+    const s = await (await api("/integrations/prowler/import", { method: "POST", body: JSON.stringify({ findings: list }) })).json();
+    await load(); say(`Imported ${s.summary.total} findings.`);
+  });
+};
+$("#btn-bell").onclick = () => drawerFindings({ severity: "critical" });
+$("#btn-gear").onclick = drawerTools;
+$("#lnk-std").onclick = drawerStandards;
+$("#lnk-sum").onclick = $("#lnk-fc").onclick = drawerControls;
+$("#lnk-q").onclick = () => drawerFindings();
+$("#lnk-acc").onclick = drawerAccounts;
+const navActs = { dash: () => scrollTo({ top: 0, behavior: reduced ? "auto" : "smooth" }), std: drawerStandards, find: () => drawerFindings(), acc: drawerAccounts };
+document.querySelectorAll("[data-nav]").forEach(b => { b.append(icon({ dash: "grid", std: "shield", find: "list", acc: "cloud" }[b.dataset.nav])); b.onclick = navActs[b.dataset.nav]; });
+$("#globe-ic").replaceChildren(icon("globe")); $("#globe-ic").style.display = "contents";
+$("#globe-ic svg").setAttribute("style", "width:30px;height:30px;color:#8fa6ba");
+$("#btn-aws").append(icon("target")); $("#btn-bell").prepend(icon("bell")); $("#btn-gear").append(icon("gear"));
+
+buildGauge(); render();
+load().catch(e => say(e.message, true));
+setInterval(() => ov && !ov.empty && render(), 60000);
+</script>
+</body>
+</html>
